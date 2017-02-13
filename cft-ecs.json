@@ -1,0 +1,714 @@
+{
+  "Description": "Create ECS cluster and ALB",
+  "Mappings": {
+    "params": {
+      "ClusterName": {
+        "dev": "helloworld-dev",
+        "qa": "helloworld-qa",
+        "prod": "helloworld-prod"
+      },
+      "SecurityGroups": {
+        "dev": [],
+        "qa": [],
+        "poc": [],
+        "prod": []
+      },
+      "Subnet": {
+        "dev": [],
+        "qa": [],
+        "prod": []
+      },
+      "AMI": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "SSLCert": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "SNSTopic": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "KeyPairName": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "InstanceProfile": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "ELBDNSName": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "DNSZoneName": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "DNSZoneId": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "ELBSubnets": {
+        "dev": [],
+        "qa": [],
+        "prod": []
+      },
+      "ELBSecurityGroups": {
+        "dev": [],
+        "qa": [],
+        "prod": []
+      },
+      "VPCId": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      }
+    }
+  },
+  "Parameters": {
+    "Environment": {
+      "AllowedValues": [
+        "dev",
+        "qa",
+        "prod"
+      ],
+      "Default": "dev",
+      "Type": "String"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t2.medium"
+    },
+    "Scheme": {
+      "Type": "String",
+      "Default": "internal"
+    },
+    "DBuser": {
+      "NoEcho": "true",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+    },
+    "DBpassword": {
+      "NoEcho": "true",
+      "Type": "String",
+      "MinLength": "8",
+      "MaxLength": "41",
+      "AllowedPattern": "[a-zA-Z0-9\\p{Punct}]*",
+      "ConstraintDescription": "must contain only alphanumeric characters or punctuation."
+    }
+  },
+  "Resources": {
+    "applaunchconfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": {
+          "Fn::FindInMap": [
+            "params",
+            "AMI",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "AssociatePublicIpAddress": false,
+        "SecurityGroups": {
+          "Fn::FindInMap": [
+            "params",
+            "SecurityGroups",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Fn::FindInMap": [
+            "params",
+            "InstanceProfile",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "KeyName": {
+          "Fn::FindInMap": [
+            "params",
+            "KeyPairName",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "DeleteOnTermination": true,
+              "VolumeSize": "20",
+              "VolumeType": "gp2"
+            }
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "/usr/bin/curl -L https://github.com/raw/marshyski/ecs-kit/master/userdata.sh | /bin/bash -s -- ",
+                {
+                  "Ref": "DBuser"
+                },
+                " ",
+                {
+                  "Ref": "DBpassword"
+                },
+                " ",
+                {
+                  "Ref": "Environment"
+                },
+                " ",
+                {
+                  "Fn::FindInMap": [
+                    "params",
+                    "ClusterName",
+                    {
+                      "Ref": "Environment"
+                    }
+                  ]
+                }
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "elbDNSRecord": {
+      "Type": "AWS::Route53::RecordSetGroup",
+      "Properties": {
+        "HostedZoneName": {
+          "Fn::FindInMap": [
+            "params",
+            "DNSZoneName",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "RecordSets": [
+          {
+            "Name": {
+              "Fn::FindInMap": [
+                "params",
+                "ELBDNSName",
+                {
+                  "Ref": "Environment"
+                }
+              ]
+            },
+            "Type": "A",
+            "AliasTarget": {
+              "HostedZoneId": {
+                "Fn::FindInMap": [
+                  "params",
+                  "DNSZoneId",
+                  {
+                    "Ref": "Environment"
+                  }
+                ]
+              },
+              "DNSName": {
+                "Fn::GetAtt": [
+                  "ELB",
+                  "DNSName"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ELB": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::FindInMap": [
+            "params",
+            "ClusterName",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "Subnets": {
+          "Fn::FindInMap": [
+            "params",
+            "ELBSubnets",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "SecurityGroups": {
+          "Fn::FindInMap": [
+            "params",
+            "ELBSecurityGroups",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "Scheme": {
+          "Ref": "Scheme"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::FindInMap": [
+                "params",
+                "ClusterName",
+                {
+                  "Ref": "Environment"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ELBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "ELBTargetGroup"
+            }
+          }
+        ],
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Fn::FindInMap": [
+                "params",
+                "SSLCert",
+                {
+                  "Ref": "Environment"
+                }
+              ]
+            }
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "ELB"
+        },
+        "Port": "443",
+        "Protocol": "HTTPS"
+      }
+    },
+    "ELBTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "HealthCheckIntervalSeconds": 5,
+        "HealthCheckPath": "/",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 2,
+        "HealthyThresholdCount": 2,
+        "Matcher": {
+          "HttpCode": "200"
+        },
+        "Name": {
+          "Fn::FindInMap": [
+            "params",
+            "ClusterName",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "Port": 443,
+        "Protocol": "HTTPS",
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "2"
+          }
+        ],
+        "UnhealthyThresholdCount": 2,
+        "VpcId": {
+          "Fn::FindInMap": [
+            "params",
+            "VPCId",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "ELB"
+            }
+          }
+        ]
+      }
+    },
+    "ALBHealthyHostCount": {
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "SNSTopic",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ],
+        "AlarmDescription": "The number of targets that are considered healthy",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELBTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
+          },
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELB",
+                "LoadBalancerFullName"
+              ]
+            }
+          }
+        ],
+        "EvaluationPeriods": "2",
+        "MetricName": "HealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Period": "300",
+        "Statistic": "Sum",
+        "Threshold": "3"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    },
+    "ALBHTTPCodeELB5XXCount": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "The number of HTTP 5XX server error codes that originate from the load balancer. This count does not include any response codes generated by the targets",
+        "MetricName": "HTTPCode_Target_5XX_Count",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Sum",
+        "Period": "900",
+        "EvaluationPeriods": "1",
+        "Threshold": "50",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "SNSTopic",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELBTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
+          },
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELB",
+                "LoadBalancerFullName"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ALBHTTPCodeELB4XXCount": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "The number of HTTP 4XX server error codes that originate from the load balancer. This count does not include any response codes generated by the targets",
+        "MetricName": "HTTPCode_Target_4XX_Count",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Sum",
+        "Period": "300",
+        "EvaluationPeriods": "1",
+        "Threshold": "2000",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "SNSTopic",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELBTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
+          },
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELB",
+                "LoadBalancerFullName"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ALBTargetResponseTime": {
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "SNSTopic",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ],
+        "AlarmDescription": "The time elapsed, in seconds, after the request leaves the load balancer until a response from the target is received. This is equivalent to the target_processing_time field in the access logs",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELBTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
+          },
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::GetAtt": [
+                "ELB",
+                "LoadBalancerFullName"
+              ]
+            }
+          }
+        ],
+        "EvaluationPeriods": "1",
+        "MetricName": "TargetResponseTime",
+        "Namespace": "AWS/ApplicationELB",
+        "Period": "900",
+        "Statistic": "Average",
+        "Threshold": "8"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    },
+    "appautoscalinggroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones": {
+          "Fn::GetAZs": "AWS::Region"
+        },
+        "LaunchConfigurationName": {
+          "Ref": "applaunchconfig"
+        },
+        "VPCZoneIdentifier": {
+          "Fn::FindInMap": [
+            "params",
+            "Subnet",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "TargetGroupARNs": [
+          {
+            "Ref": "ELBTargetGroup"
+          }
+        ],
+        "DesiredCapacity": 2,
+        "MinSize": 2,
+        "MaxSize": 3,
+        "HealthCheckType": "EC2",
+        "HealthCheckGracePeriod": "780",
+        "Tags": [
+          {
+            "Key": "Name",
+            "PropagateAtLaunch": true,
+            "Value": {
+              "Fn::FindInMap": [
+                "params",
+                "ClusterName",
+                {
+                  "Ref": "Environment"
+                }
+              ]
+            }
+          },
+          {
+            "Key": "SNSTopicARN",
+            "PropagateAtLaunch": true,
+            "Value": {
+              "Fn::FindInMap": [
+                "params",
+                "SNSTopic",
+                {
+                  "Ref": "Environment"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ASGCpuHighAlarm": {
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "ASGScaleUpPolicy"
+          }
+        ],
+        "AlarmDescription": "Scale up if CPU > 65% average over 3 minutes",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "appautoscalinggroup"
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Period": 60,
+        "Statistic": "Average",
+        "Threshold": "65"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    },
+    "ASGCpuLowAlarm": {
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "ASGScaleDownPolicy"
+          }
+        ],
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "appautoscalinggroup"
+            }
+          }
+        ],
+        "EvaluationPeriods": 10,
+        "AlarmDescription": "Scale in if CPU <= 35% average over 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Period": 60,
+        "Threshold": "0",
+        "Statistic": "Average"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    },
+    "ASGScaleDownPolicy": {
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "appautoscalinggroup"
+        },
+        "Cooldown": 780,
+        "ScalingAdjustment": "-1"
+      },
+      "Type": "AWS::AutoScaling::ScalingPolicy"
+    },
+    "ASGScaleUpPolicy": {
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "appautoscalinggroup"
+        },
+        "Cooldown": 780,
+        "ScalingAdjustment": "1"
+      },
+      "Type": "AWS::AutoScaling::ScalingPolicy"
+    },
+    "ASGStatusCheckAlarm": {
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "SNSTopic",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ],
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "appautoscalinggroup"
+            }
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "StatusCheckFailed",
+        "Namespace": "AWS/EC2",
+        "Period": 180,
+        "Statistic": "Maximum",
+        "Threshold": "1"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    }
+  }
+}

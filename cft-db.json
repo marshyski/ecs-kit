@@ -1,0 +1,249 @@
+{
+  "Description": "Create RDS database",
+  "Mappings": {
+    "params": {
+      "ClusterName": {
+        "dev": "helloworld-dev",
+        "qa": "helloworld-qa",
+        "prod": "helloworld-prod"
+      },
+      "SNSTopic": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "DNSDBZoneId": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "RDSDNSName": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "RDSDNSRecord": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "RDSGroupName": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      },
+      "RDSSecurityGroup": {
+        "dev": [],
+        "qa": [],
+        "prod": []
+      },
+      "KMSKeyId": {
+        "dev": "",
+        "qa": "",
+        "prod": ""
+      }
+    }
+  },
+  "Parameters": {
+    "Environment": {
+      "AllowedValues": [
+        "dev",
+        "qa",
+        "prod"
+      ],
+      "Default": "dev",
+      "Type": "String"
+    },
+    "DBuser": {
+      "NoEcho": "true",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+    },
+    "DBpassword": {
+      "NoEcho": "true",
+      "Type": "String",
+      "MinLength": "8",
+      "MaxLength": "41",
+      "AllowedPattern": "[a-zA-Z0-9\\p{Punct}]*",
+      "ConstraintDescription": "must contain only alphanumeric characters or punctuation."
+    }
+  },
+  "Resources": {
+    "dbDNSRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Fn::FindInMap": [
+            "params",
+            "DNSDBZoneId",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "Name": {
+          "Fn::FindInMap": [
+            "params",
+            "RDSDNSName",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "Type": "CNAME",
+        "TTL": "900",
+        "ResourceRecords": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "RDSDNSRecord",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "postgresDB": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "AllocatedStorage": "10",
+        "DBInstanceClass": "db.m4.xlarge",
+        "DBName": "helloworld",
+        "AllowMajorVersionUpgrade": "false",
+        "AutoMinorVersionUpgrade": "true",
+        "BackupRetentionPeriod": "1",
+        "DBInstanceIdentifier": {
+          "Fn::FindInMap": [
+            "params",
+            "ClusterName",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "DBSubnetGroupName": {
+          "Fn::FindInMap": [
+            "params",
+            "RDSGroupName",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "Engine": "postgres",
+        "EngineVersion": "9.5.2",
+        "KmsKeyId": {
+          "Fn::FindInMap": [
+            "params",
+            "KMSKeyId",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        },
+        "LicenseModel": "postgresql-license",
+        "MasterUsername": {
+          "Ref": "DBuser"
+        },
+        "MasterUserPassword": {
+          "Ref": "DBpassword"
+        },
+        "MultiAZ": "true",
+        "Port": "5432",
+        "PubliclyAccessible": "false",
+        "StorageEncrypted": "true",
+        "StorageType": "gp2",
+        "VPCSecurityGroups": {
+          "Fn::FindInMap": [
+            "params",
+            "RDSSecurityGroup",
+            {
+              "Ref": "Environment"
+            }
+          ]
+        }
+      }
+    },
+    "AlarmRDSCPUUtil": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "CPU Utilization on AMPT RDS Instance is too high",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Maximum",
+        "Period": "300",
+        "EvaluationPeriods": "1",
+        "Threshold": "90",
+        "AlarmActions": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "SNSTopic",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::FindInMap": [
+                "params",
+                "ClusterName",
+                {
+                  "Ref": "Environment"
+                }
+              ]
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold"
+      }
+    },
+    "AlarmRDSStorageSpace": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Not enough storage available on AMPT RDS Instance",
+        "MetricName": "FreeStorageSpace",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Maximum",
+        "Period": "300",
+        "EvaluationPeriods": "1",
+        "Threshold": "1610612736",
+        "AlarmActions": [
+          {
+            "Fn::FindInMap": [
+              "params",
+              "SNSTopic",
+              {
+                "Ref": "Environment"
+              }
+            ]
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::FindInMap": [
+                "params",
+                "ClusterName",
+                {
+                  "Ref": "Environment"
+                }
+              ]
+            }
+          }
+        ],
+        "ComparisonOperator": "LessThanOrEqualToThreshold"
+      }
+    }
+  }
+}
