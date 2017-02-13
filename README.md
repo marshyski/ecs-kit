@@ -103,7 +103,7 @@ Table of contents
 
 
 ## <a name="architecture"> Architecture
-
+![enter image description here](https://github.com/marshyski/ecs-kit/raw/master/ecs-kit.png)
 
 ## <a name="motivation"> Motivation
 
