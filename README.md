@@ -109,5 +109,5 @@ Table of contents
 
  - Update application version quickly
  - Quicker refresh of EC2 instances with new AMIs
- - Use only minimal tools and AWS services for logging, metrics, alarms, etc.
+ - Use minimal tools and AWS services for logging, metrics, alarms, etc.
  - Bootstrap microservices to run on EC2 Container Service and Application Load Balancer
