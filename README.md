@@ -21,7 +21,7 @@ Table of contents
 
 ## <a name="ec2-dependencies"> EC2 Dependencies
 
-*See* `userdata.sh`
+*See* https://raw.githubusercontent.com/marshyski/ecs-kit/master/userdata.sh
 
  1. RHEL 7
  2. awscli (Optional)
@@ -37,6 +37,7 @@ Table of contents
  - CloudWatch
  - EC2
  - ECS
+ - IAM
  - RDS
  - Route53
  - SNS Topic
