@@ -45,7 +45,10 @@ Table of contents
 
 ## <a name="getting-started"> Getting Started
 
-*This assumes you have VPC, Security Groups, IAM Certs, KeyPair and Route53 Zones created*
+*This assumes you have VPC, Security Groups, IAM Certs, KeyPair, SNS Topic and Route53 Zones created*
+
+ 1. Create ECS Cluster manually by adding just clicking create cluster and entering name `<app name>-<environment>`
+ 2. Create CloudWatch Log Group `<app name>-<environment>`
 
 **cft-ecs.json**
 
