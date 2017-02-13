@@ -170,7 +170,7 @@
               "",
               [
                 "#!/bin/bash\n",
-                "/usr/bin/curl -L https://github.com/raw/marshyski/ecs-kit/master/userdata.sh | /bin/bash -s -- ",
+                "/usr/bin/curl -L https://raw.githubusercontent.com/marshyski/ecs-kit/master/userdata.sh | /bin/bash -s -- ",
                 {
                   "Ref": "DBuser"
                 },
